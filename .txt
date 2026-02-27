@@ -1,0 +1,2 @@
+cd C:\Users\User\Downloads\Telegram Desktop\test2
+copy /b *.part* combined.zip
