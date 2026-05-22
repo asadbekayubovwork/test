@@ -1,0 +1,19 @@
+# Сборка и запуск фронтенда в Docker.
+# 1. Скопируйте .env.example → .env и заполните VITE_* (обязателен VITE_MINIAPP_CLIENT_KEY).
+# 2. docker compose up --build
+# 3. Откройте http://localhost:8080
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-https://api-wordzen.stnapps.com}
+        VITE_ACCOUNT_API_BASE_URL: ${VITE_ACCOUNT_API_BASE_URL:-https://account-wordzen.stnapps.com}
+        VITE_PAYMENT_API_BASE_URL: ${VITE_PAYMENT_API_BASE_URL:-https://payment-wordzen.stnapps.com}
+        VITE_MINIAPP_CLIENT_KEY: ${VITE_MINIAPP_CLIENT_KEY}
+        VITE_MEDIA_BASE_URL: ${VITE_MEDIA_BASE_URL:-https://media.stnapps.com}
+        VITE_MEDIA_PROXY_PREFIX: ${VITE_MEDIA_PROXY_PREFIX:-/media}
+    ports:
+      - "${WEB_PORT:-8080}:80"

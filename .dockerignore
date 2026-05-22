@@ -1,0 +1,16 @@
+node_modules
+dist
+.git
+.github
+*.md
+!README.md
+.env
+.env.*
+!.env.example
+.claude
+.cursor
+.vscode
+.idea
+**/*.log
+coverage
+.DS_Store

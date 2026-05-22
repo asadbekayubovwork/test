@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/media/(.*)", "destination": "https://media.stnapps.com/$1" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
