@@ -10,6 +10,8 @@ import {
   LogOut,
   ChevronRight,
   Check,
+  FileText,
+  Shield,
 } from 'lucide-react';
 import { useSettingsStore, availableLanguages, uiLanguages } from '../../lib/stores';
 import { Header, Card, Modal } from '../../components/ui';
@@ -17,6 +19,8 @@ import CountryRegionSelector from '../../components/CountryRegionSelector';
 import { cn } from '../../lib/utils/cn';
 import { useTranslation } from '../../lib/i18n';
 import { getCountryByCode, getCountryName, getRegionName } from '../../lib/data';
+import { openLink } from '../../lib/telegram';
+import { LEGAL_URLS } from '../../lib/constants/legal';
 
 type SettingItemProps = {
   icon: ComponentType<{ className?: string }>;
@@ -191,6 +195,27 @@ const Settings = () => {
               toggle
               isEnabled={soundEffects}
               onClick={() => setSoundEffects(!soundEffects)}
+            />
+          </Card>
+        </div>
+
+        {/* Legal Section */}
+        <div className="mb-6">
+          <h2 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2 px-1">
+            {t('settings.legal')}
+          </h2>
+          <Card padding="none" className="divide-y divide-gray-100">
+            <SettingItem
+              icon={FileText}
+              label={t('settings.publicOffer')}
+              description={t('settings.publicOfferDesc')}
+              onClick={() => openLink(LEGAL_URLS.PUBLIC_OFFER)}
+            />
+            <SettingItem
+              icon={Shield}
+              label={t('settings.privacyPolicy')}
+              description={t('settings.privacyPolicyDesc')}
+              onClick={() => openLink(LEGAL_URLS.PRIVACY_POLICY)}
             />
           </Card>
         </div>

@@ -100,6 +100,10 @@ const uz: PartialTranslations = {
   login: {
     authenticating: 'Autentifikatsiya...',
     pleaseWait: 'Telegram orqali kirishingizni kutib turing.',
+    telegramAuthFailed: 'Telegram orqali kirish muvaffaqiyatsiz tugadi',
+    retry: 'Qayta urinish',
+    copyErrorDetails: 'Xato tafsilotlarini nusxalash',
+    copied: 'Nusxalandi!',
     welcomeBack: 'Xush kelibsiz',
     signInContinue: 'O\'rganishni davom ettirish uchun kiring',
     email: 'Elektron pochta',
@@ -434,6 +438,11 @@ const uz: PartialTranslations = {
     country: 'Mamlakat',
     regionModalDesc: 'Mahalliy reyting uchun mamlakat va mintaqani tanlang',
     version: 'Versiya 1.0.0 (Build 42)',
+    legal: 'Yuridik',
+    publicOffer: 'Ommaviy oferta',
+    publicOfferDesc: 'Obuna shartlari va pulni qaytarish siyosati',
+    privacyPolicy: 'Maxfiylik siyosati',
+    privacyPolicyDesc: 'Ma\'lumotlaringiz qanday qayta ishlanadi',
   },
 
   shop: {
@@ -579,6 +588,13 @@ const uz: PartialTranslations = {
     noMatches: 'Moslik topilmadi',
     tryDifferentSearch: 'Boshqa qidiruv so\'zini sinab ko\'ring',
     examples: 'Misollar',
+  },
+
+  subscription: {
+    purchase: {
+      agreeText: 'Obuna bo\'lish orqali siz quyidagiga rozilik bildirasiz:',
+      publicOffer: 'Ommaviy oferta',
+    },
   },
 
   games: {

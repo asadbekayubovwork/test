@@ -100,6 +100,10 @@ const ru: PartialTranslations = {
   login: {
     authenticating: 'Авторизация...',
     pleaseWait: 'Пожалуйста, подождите, пока мы авторизуем вас через Telegram.',
+    telegramAuthFailed: 'Не удалось войти через Telegram',
+    retry: 'Попробовать снова',
+    copyErrorDetails: 'Скопировать детали ошибки',
+    copied: 'Скопировано!',
     welcomeBack: 'С возвращением',
     signInContinue: 'Войдите, чтобы продолжить обучение',
     email: 'Эл. почта',
@@ -451,6 +455,11 @@ const ru: PartialTranslations = {
     country: 'Страна',
     regionModalDesc: 'Выберите страну и регион для местных рейтингов',
     version: 'Версия 1.0.0 (Сборка 42)',
+    legal: 'Правовая информация',
+    publicOffer: 'Публичная оферта',
+    publicOfferDesc: 'Условия подписки и политика возврата',
+    privacyPolicy: 'Политика конфиденциальности',
+    privacyPolicyDesc: 'Как мы обрабатываем ваши данные',
   },
 
   shop: {
@@ -748,6 +757,8 @@ const ru: PartialTranslations = {
       tryAgain: 'Попробовать снова',
       payWithStars: 'Оплатить Stars',
       starsCost: '{{count}} Stars',
+      agreeText: 'Оформляя подписку, вы соглашаетесь с',
+      publicOffer: 'Публичной офертой',
     },
   },
 

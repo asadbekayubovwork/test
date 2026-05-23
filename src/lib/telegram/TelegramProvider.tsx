@@ -22,6 +22,17 @@ export const TelegramProvider = ({ children }: { children: ReactNode }) => {
     console.log('[TG Auth] initData length:', initData.length);
     console.log('[TG Auth] initData preview:', initData.substring(0, 100) + '...');
 
+    try {
+      const params = new URLSearchParams(initData);
+      const parsed: Record<string, string> = {};
+      params.forEach((value, key) => {
+        parsed[key] = key === 'hash' ? `${value.substring(0, 10)}...` : value.substring(0, 60);
+      });
+      console.log('[TG Auth] initData parsed:', parsed);
+    } catch (e) {
+      console.warn('[TG Auth] Could not parse initData:', e);
+    }
+
     setIsAuthenticating(true);
     setAuthError(null);
 

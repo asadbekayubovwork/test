@@ -15,7 +15,41 @@ const Login = () => {
     webApp,
     isReady,
     isAuthenticating: tgAuthenticating,
+    authError: tgAuthError,
+    reAuthenticate,
   } = useTelegram();
+  const [isRetrying, setIsRetrying] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const handleRetryTelegramAuth = async () => {
+    setIsRetrying(true);
+    haptic.impact('light');
+    try {
+      await reAuthenticate();
+    } finally {
+      setIsRetrying(false);
+    }
+  };
+
+  const handleCopyError = async () => {
+    if (!tgAuthError) return;
+    const report = [
+      `Error: ${tgAuthError}`,
+      `Platform: ${webApp?.platform ?? 'unknown'}`,
+      `TG Version: ${webApp?.version ?? 'unknown'}`,
+      `User ID: ${webApp?.initDataUnsafe?.user?.id ?? 'unknown'}`,
+      `Auth date: ${webApp?.initDataUnsafe?.auth_date ?? 'unknown'}`,
+      `Time: ${new Date().toISOString()}`,
+    ].join('\n');
+    try {
+      await navigator.clipboard.writeText(report);
+      setCopied(true);
+      haptic.notification('success');
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      haptic.notification('error');
+    }
+  };
 
   const hasTelegramInitData = Boolean(webApp?.initData?.trim());
 
@@ -58,7 +92,7 @@ const Login = () => {
     return <Navigate to="/" replace />;
   }
 
-  if (telegramAutoLoginBusy) {
+  if (telegramAutoLoginBusy || isRetrying) {
     return (
       <div className="flex min-h-screen items-center justify-center p-4 bg-background-light dark:bg-background-dark">
         <div className="text-center">
@@ -73,6 +107,45 @@ const Login = () => {
           <p className="text-gray-500 dark:text-gray-400">
             {t('login.pleaseWait')}
           </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Telegram'da ochilgan, lekin auto-auth muvaffaqiyatsiz tugagan
+  if (isTelegram && hasTelegramInitData && tgAuthError) {
+    return (
+      <div className="flex min-h-screen items-center justify-center p-4 bg-background-light dark:bg-background-dark">
+        <div className="text-center max-w-sm">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-500/10 flex items-center justify-center">
+            <span className="material-symbols-outlined text-red-500 text-3xl">
+              error
+            </span>
+          </div>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+            {t('login.telegramAuthFailed')}
+          </h2>
+          <p className="text-gray-500 dark:text-gray-400 mb-6 break-words">
+            {tgAuthError}
+          </p>
+          <div className="flex flex-col gap-2 items-center">
+            <button
+              onClick={handleRetryTelegramAuth}
+              className="px-6 py-3 bg-primary text-white rounded-xl font-medium flex items-center gap-2"
+            >
+              <span className="material-symbols-outlined">refresh</span>
+              {t('login.retry')}
+            </button>
+            <button
+              onClick={handleCopyError}
+              className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 rounded-xl flex items-center gap-2"
+            >
+              <span className="material-symbols-outlined text-base">
+                {copied ? 'check' : 'content_copy'}
+              </span>
+              {copied ? t('login.copied') : t('login.copyErrorDetails')}
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -103,7 +176,7 @@ const Login = () => {
             </span>
           </div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-            {t('login.welcomeBack')}
+            {t('login.welcomeBack')} 2200
           </h1>
           <p className="text-gray-500 dark:text-gray-400">
             {t('login.signInContinue')}

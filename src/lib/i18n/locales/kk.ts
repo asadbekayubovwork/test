@@ -100,6 +100,10 @@ const kk: PartialTranslations = {
   login: {
     authenticating: 'Аутентификация...',
     pleaseWait: 'Telegram арқылы кіріп жатқанша күтіңіз.',
+    telegramAuthFailed: 'Telegram арқылы кіру сәтсіз аяқталды',
+    retry: 'Қайта көру',
+    copyErrorDetails: 'Қате мәліметтерін көшіру',
+    copied: 'Көшірілді!',
     welcomeBack: 'Қайта қош келдіңіз',
     signInContinue: 'Оқуды жалғастыру үшін кіріңіз',
     email: 'Электрондық пошта',
@@ -434,6 +438,11 @@ const kk: PartialTranslations = {
     country: 'Ел',
     regionModalDesc: 'Жергілікті рейтинг үшін ел мен аймақты таңдаңыз',
     version: 'Нұсқа 1.0.0 (Құрастыру 42)',
+    legal: 'Құқықтық',
+    publicOffer: 'Жария оферта',
+    publicOfferDesc: 'Жазылым шарттары және ақшаны қайтару саясаты',
+    privacyPolicy: 'Құпиялылық саясаты',
+    privacyPolicyDesc: 'Біз сіздің деректеріңізді қалай өңдейміз',
   },
 
   shop: {

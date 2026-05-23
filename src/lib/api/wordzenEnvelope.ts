@@ -19,9 +19,11 @@ export function wordzenErrorMessage(
   body: Pick<WordzenApiResponse<unknown>, 'error'>,
   fallback: string
 ): string {
-  return (
-    body.error?.message?.trim() ||
-    body.error?.detail?.trim() ||
-    fallback
-  );
+  const message = body.error?.message?.trim();
+  const detail = body.error?.detail?.trim();
+
+  if (message && detail && detail !== message) {
+    return `${message}: ${detail}`;
+  }
+  return message || detail || fallback;
 }

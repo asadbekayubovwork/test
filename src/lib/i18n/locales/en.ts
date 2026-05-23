@@ -98,6 +98,10 @@ const en = {
   login: {
     authenticating: 'Authenticating...',
     pleaseWait: 'Please wait while we log you in with Telegram.',
+    telegramAuthFailed: 'Telegram sign-in failed',
+    retry: 'Try again',
+    copyErrorDetails: 'Copy error details',
+    copied: 'Copied!',
     welcomeBack: 'Welcome Back',
     signInContinue: 'Sign in to continue learning',
     email: 'Email',
@@ -449,6 +453,11 @@ const en = {
     country: 'Country',
     regionModalDesc: 'Select your country and region for local rankings',
     version: 'Version 1.0.0 (Build 42)',
+    legal: 'Legal',
+    publicOffer: 'Public Offer',
+    publicOfferDesc: 'Subscription terms and refund policy',
+    privacyPolicy: 'Privacy Policy',
+    privacyPolicyDesc: 'How we handle your data',
   },
 
   shop: {
@@ -745,6 +754,8 @@ const en = {
       tryAgain: 'Try Again',
       payWithStars: 'Pay with Stars',
       starsCost: '{{count}} Stars',
+      agreeText: 'By subscribing, you agree to the',
+      publicOffer: 'Public Offer',
     },
   },
 

@@ -17,7 +17,7 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     server: {
-      allowedHosts: ['unscintillant-maudlinly-johnna.ngrok-free.dev'],
+      allowedHosts: ['.ngrok-free.dev', '.ngrok-free.app', '.ngrok.io'],
       // proxy: {
       //   // Медиа курсов
       //   '/media': {

@@ -100,6 +100,10 @@ const uk: PartialTranslations = {
   login: {
     authenticating: 'Автентифікація...',
     pleaseWait: 'Будь ласка, зачекайте, поки ми увійдемо через Telegram.',
+    telegramAuthFailed: 'Не вдалося увійти через Telegram',
+    retry: 'Спробувати ще раз',
+    copyErrorDetails: 'Скопіювати деталі помилки',
+    copied: 'Скопійовано!',
     welcomeBack: 'З поверненням',
     signInContinue: 'Увійдіть, щоб продовжити навчання',
     email: 'Електронна пошта',
@@ -434,6 +438,11 @@ const uk: PartialTranslations = {
     country: 'Країна',
     regionModalDesc: 'Оберіть країну та регіон для місцевих рейтингів',
     version: 'Версія 1.0.0 (Збірка 42)',
+    legal: 'Юридична інформація',
+    publicOffer: 'Публічна оферта',
+    publicOfferDesc: 'Умови підписки та політика повернення коштів',
+    privacyPolicy: 'Політика конфіденційності',
+    privacyPolicyDesc: 'Як ми обробляємо ваші дані',
   },
 
   shop: {

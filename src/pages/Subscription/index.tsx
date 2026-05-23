@@ -239,9 +239,6 @@ const Subscription = () => {
               </p>
             )}
           </div>
-          {subStatus === 'loading' && (
-            <p className="mt-2 text-xs text-gray-400">{t('common.loading')}</p>
-          )}
         </motion.div>
 
         {/* Plan comparison */}

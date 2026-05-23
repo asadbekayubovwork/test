@@ -81,9 +81,20 @@ function newIdempotencyKey(): string {
  * This is the primary authentication method for Telegram Mini App
  */
 export const loginWithTelegram = async (initData: string): Promise<TokenDto> => {
+  console.log('[TG Login] POST /api/v1/auth/telegram/login', {
+    initDataLength: initData.length,
+    initDataPreview: initData.substring(0, 80) + '...',
+  });
+
   try {
     const response = await apiClient.post<WordzenApiResponse<TokenDto>>('/api/v1/auth/telegram/login', {
       initData,
+    });
+
+    console.log('[TG Login] Response:', {
+      status: response.status,
+      success: response.data.success,
+      hasData: !!response.data.data,
     });
 
     if (response.data.success && response.data.data) {
@@ -94,8 +105,25 @@ export const loginWithTelegram = async (initData: string): Promise<TokenDto> => 
 
     throw new Error(wordzenErrorMessage(response.data, 'Telegram login failed'));
   } catch (err: any) {
-    if (err.response?.data) {
-      throw new Error(wordzenErrorMessage(err.response.data, 'Telegram login failed'));
+    const status = err.response?.status;
+    const data = err.response?.data;
+    console.error('[TG Login] Failed:', {
+      status,
+      statusText: err.response?.statusText,
+      data,
+      message: err.message,
+    });
+
+    if (data) {
+      const apiMessage = wordzenErrorMessage(data, 'Telegram login failed');
+      const uid = data?.error?.uid;
+      const parts = [apiMessage];
+      if (status) parts.push(`HTTP ${status}`);
+      if (uid) parts.push(`ID: ${uid}`);
+      throw new Error(parts.join(' · '));
+    }
+    if (status) {
+      throw new Error(`Telegram login failed (HTTP ${status}): ${err.message}`);
     }
     throw err;
   }

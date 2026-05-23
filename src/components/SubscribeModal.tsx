@@ -9,6 +9,8 @@ import {
 } from '../lib/api/telegramPayment';
 import { getPrices, type PackageResponse } from '../lib/api/pricing';
 import { useSubscriptionStore, useUserStore } from '../lib/stores';
+import { LEGAL_URLS } from '../lib/constants/legal';
+import { openLink } from '../lib/telegram';
 
 interface SubscribeModalProps {
   isOpen: boolean;
@@ -201,6 +203,16 @@ const SubscribeModal = ({
       >
         {t('subscription.purchase.payWithStars')}
       </button>
+      <p className="mt-3 text-center text-xs text-gray-500 dark:text-gray-400">
+        {t('subscription.purchase.agreeText')}{' '}
+        <button
+          type="button"
+          onClick={() => openLink(LEGAL_URLS.PUBLIC_OFFER)}
+          className="text-primary hover:underline"
+        >
+          {t('subscription.purchase.publicOffer')}
+        </button>
+      </p>
     </div>
   );
 
