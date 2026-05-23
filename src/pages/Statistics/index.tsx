@@ -15,12 +15,6 @@ const Statistics = () => {
   const { report, isLoading, error, fetchReport } = useReportStore();
   const { rawSessions, fetchProfileStats } = useProfileStatsStore();
   const isPremium = useSubscriptionStore((s) => s.isPremium());
-  const fetchSubscription = useSubscriptionStore((s) => s.fetchSubscription);
-
-  useEffect(() => {
-    // Subscription state may not have loaded yet — read once before locking.
-    fetchSubscription();
-  }, [fetchSubscription]);
 
   useEffect(() => {
     if (!isPremium) return;

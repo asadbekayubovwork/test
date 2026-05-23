@@ -5,8 +5,6 @@ import {
 } from '../api/subscription';
 import type { PlanTier } from '../constants/freeTierLimits';
 
-type FetchStatus = 'idle' | 'loading' | 'success' | 'error';
-
 interface SubscriptionState {
   subscription: SubscriptionResponse | null;
   cancelStatus: 'idle' | 'cancelling' | 'success' | 'error';

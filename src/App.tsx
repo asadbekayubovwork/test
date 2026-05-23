@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { isAuthenticated } from './lib/api/client';
-import { useUserStore, useSubscriptionStore } from './lib/stores';
+import { useUserStore } from './lib/stores';
 import { TabBar } from './components/ui';
 import { useTelegram } from './lib/telegram/index';
 import { useSessionTracking } from './lib/hooks/useSessionTracking';
@@ -105,8 +105,6 @@ const RequireOnboarding = ({ children }: { children: React.ReactNode }) => {
 };
 
 function App() {
-  const user = useUserStore((state) => state.user);
-
   return (
     <BrowserRouter>
       <SessionTracker />

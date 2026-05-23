@@ -443,29 +443,23 @@ const Shop = () => {
               </p>
 
               <Card padding="md" className="mb-4 bg-gradient-to-br from-primary to-purple-600 border-0 shadow-lg shadow-primary/20 text-white">
-                {subFetchStatus === 'loading' ? (
-                  <Skeleton className="h-24 w-full bg-white/20" />
+                <p className="text-xs uppercase tracking-wider opacity-80">
+                  {t('subscription.yourPlan')}
+                </p>
+                <p className="mt-1 text-2xl font-bold">{t(`subscription.${currentTier}`)}</p>
+                {subscription && subscription.statusCode === 'ACTIVE' ? (
+                  <p className="mt-2 text-sm opacity-90">
+                    {t('subscription.activeUntil', {
+                      date: formatDate(subscription.expiredAt),
+                    })}
+                  </p>
                 ) : (
-                  <>
-                    <p className="text-xs uppercase tracking-wider opacity-80">
-                      {t('subscription.yourPlan')}
-                    </p>
-                    <p className="mt-1 text-2xl font-bold">{t(`subscription.${currentTier}`)}</p>
-                    {subscription && subscription.statusCode === 'ACTIVE' ? (
-                      <p className="mt-2 text-sm opacity-90">
-                        {t('subscription.activeUntil', {
-                          date: formatDate(subscription.expiredAt),
-                        })}
-                      </p>
-                    ) : (
-                      <p className="mt-2 text-sm opacity-90">
-                        {t('usage.newWordsRemaining', {
-                          remaining: remainingNewWords(),
-                          limit: FREE_TIER_LIMITS.NEW_WORDS_PER_DAY,
-                        })}
-                      </p>
-                    )}
-                  </>
+                  <p className="mt-2 text-sm opacity-90">
+                    {t('usage.newWordsRemaining', {
+                      remaining: remainingNewWords(),
+                      limit: FREE_TIER_LIMITS.NEW_WORDS_PER_DAY,
+                    })}
+                  </p>
                 )}
               </Card>
 

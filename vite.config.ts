@@ -1,19 +1,8 @@
-import { defineConfig, loadEnv } from 'vite'
+import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-import { WZ_DEV_PROXY_PREFIX as P } from './src/lib/wzDevProxyPrefixes.ts'
-
 // https://vite.dev/config/
-export default defineConfig(({ mode }) => {
-  const raw = loadEnv(mode, process.cwd(), '')
-  const apiTarget = raw.VITE_API_BASE_URL?.replace(/\/+$/, '') || 'https://api-wordzen.stnapps.com'
-  const accountTarget =
-    raw.VITE_ACCOUNT_API_BASE_URL?.replace(/\/+$/, '') || 'https://account-wordzen.stnapps.com'
-  const paymentTarget =
-    raw.VITE_PAYMENT_API_BASE_URL?.replace(/\/+$/, '') || 'https://payment-wordzen.stnapps.com'
-
-  const proxyRewrite = (prefix: string) => (path: string) => path.replace(new RegExp(`^${prefix.replace(/\//g, '\\/')}`), '')
-
+export default defineConfig(() => {
   return {
     plugins: [react()],
     server: {
