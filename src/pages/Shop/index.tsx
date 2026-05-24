@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { PaymentMethodModal, type CoinCheckoutMethod } from '../../components/payment';
 import { useTranslation } from '../../lib/i18n';
+import type { TranslationKey } from '../../lib/i18n';
 import { useTelegram } from '../../lib/telegram/index';
 import { isAuthenticated } from '../../lib/api/client';
 import {
@@ -14,38 +15,29 @@ import type {
   ShopSubscriptionOffer,
   SubscriptionsResponse,
 } from '../../lib/api/shop';
+import type { PaymentSubscriptionCode } from '../../lib/api/paymentClient';
 import {
   useUserStore,
   useSubscriptionStore,
   useTransactionsStore,
-  useUsageStore,
 } from '../../lib/stores';
-import { FREE_TIER_LIMITS } from '../../lib/constants/freeTierLimits';
-import {
-  Button,
-  Card,
-  EmptyState,
-  Skeleton,
-} from '../../components/ui';
+import './Shop.css';
 
-type ShopTab = 'subscription' | 'history';
-
-type CheckoutTarget = { offer: ShopSubscriptionOffer };
-
+type ShopTab = 'plans' | 'history';
 type LoadStatus = 'idle' | 'loading' | 'success' | 'error';
 
+const fmtNum = (n: number) =>
+  String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+
+const PLAN_CODES: PaymentSubscriptionCode[] = ['BASIC', 'PRO'];
+
 const Shop = () => {
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const navigate = useNavigate();
   const { haptic, webApp } = useTelegram();
 
   const refreshAccount = useUserStore((s) => s.refreshAccount);
-
-  const {
-    subscription,
-    getCurrentTier,
-  } = useSubscriptionStore();
-
+  const { subscription, getCurrentTier } = useSubscriptionStore();
   const {
     transactions,
     status: txStatus,
@@ -53,15 +45,13 @@ const Shop = () => {
     fetchTransactions,
   } = useTransactionsStore();
 
-  const remainingNewWords = useUsageStore((s) => s.remainingNewWords);
+  const auth = isAuthenticated();
+  const currentTier = getCurrentTier();
 
-  const [checkoutTarget, setCheckoutTarget] = useState<CheckoutTarget | null>(
-    null,
-  );
-  const [checkoutOpen, setCheckoutOpen] = useState(false);
-  const [checkoutSubmitting, setCheckoutSubmitting] = useState(false);
-
-  const [tab, setTab] = useState<ShopTab>('subscription');
+  const [tab, setTab] = useState<ShopTab>('plans');
+  const [period, setPeriod] = useState<number | null>(null);
+  const [selectedPlan, setSelectedPlan] =
+    useState<PaymentSubscriptionCode | null>(null);
 
   const [subOffersStatus, setSubOffersStatus] = useState<LoadStatus>('idle');
   const [subOffersData, setSubOffersData] = useState<SubscriptionsResponse | null>(
@@ -69,18 +59,14 @@ const Shop = () => {
   );
   const [subOffersError, setSubOffersError] = useState<string | null>(null);
 
-  const auth = isAuthenticated();
-  const currentTier = getCurrentTier();
+  const [checkoutTarget, setCheckoutTarget] =
+    useState<ShopSubscriptionOffer | null>(null);
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [checkoutSubmitting, setCheckoutSubmitting] = useState(false);
 
   useEffect(() => {
     if (auth) void refreshAccount();
   }, [auth, refreshAccount]);
-
-  useEffect(() => {
-    if (!auth) return;
-    if (tab !== 'subscription') return;
-    void refreshAccount();
-  }, [auth, tab, refreshAccount]);
 
   const loadShopSubscriptions = useCallback(async () => {
     setSubOffersStatus('loading');
@@ -99,7 +85,7 @@ const Shop = () => {
 
   useEffect(() => {
     if (!auth) return;
-    if (tab !== 'subscription') return;
+    if (tab !== 'plans') return;
     if (subOffersStatus !== 'idle') return;
     const id = requestAnimationFrame(() => {
       void loadShopSubscriptions();
@@ -113,13 +99,72 @@ const Shop = () => {
     void fetchTransactions();
   }, [auth, tab, fetchTransactions]);
 
-  const formatDate = (iso?: string) => {
-    if (!iso) return '—';
-    return new Date(iso).toLocaleDateString(undefined, {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
+  // Group offers by plan code and month
+  const grouped = useMemo(() => {
+    const map: Record<PaymentSubscriptionCode, Map<number, ShopSubscriptionOffer>> = {
+      BASIC: new Map(),
+      PRO: new Map(),
+    };
+    subOffersData?.subscriptions.forEach((o) => {
+      if (map[o.code]) map[o.code].set(o.month, o);
     });
+    return map;
+  }, [subOffersData]);
+
+  const availablePeriods = useMemo(() => {
+    const set = new Set<number>();
+    subOffersData?.subscriptions.forEach((o) => set.add(o.month));
+    return Array.from(set).sort((a, b) => a - b);
+  }, [subOffersData]);
+
+  const bestPeriod = useMemo(() => {
+    if (!availablePeriods.length) return null;
+    return availablePeriods[availablePeriods.length - 1];
+  }, [availablePeriods]);
+
+  useEffect(() => {
+    if (period !== null) return;
+    if (availablePeriods.length === 0) return;
+    setPeriod(availablePeriods[0]);
+  }, [availablePeriods, period]);
+
+  const getOffer = (code: PaymentSubscriptionCode): ShopSubscriptionOffer | null => {
+    if (period === null) return null;
+    return grouped[code].get(period) ?? null;
+  };
+
+  const computeSavePct = (
+    code: PaymentSubscriptionCode,
+    month: number,
+  ): number | null => {
+    const monthOne = grouped[code].get(1);
+    const target = grouped[code].get(month);
+    if (!monthOne || !target || month === 1) return null;
+    const baseline = monthOne.priceUzs * month;
+    if (!baseline) return null;
+    const saved = baseline - target.priceUzs;
+    if (saved <= 0) return null;
+    return Math.round((saved / baseline) * 100);
+  };
+
+  const formatDate = (iso?: string | null): string => {
+    if (!iso) return '—';
+    const date = new Date(iso);
+    const locale =
+      language === 'ru'
+        ? 'ru-RU'
+        : language === 'uk'
+          ? 'uk-UA'
+          : language === 'kk'
+            ? 'kk-KZ'
+            : language === 'uz'
+              ? 'uz-UZ'
+              : 'en-GB';
+    return new Intl.DateTimeFormat(locale, {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    }).format(date);
   };
 
   const onTab = (next: ShopTab) => {
@@ -127,44 +172,64 @@ const Shop = () => {
     setTab(next);
   };
 
-  const handleBuySubscriptionOffer = (offer: ShopSubscriptionOffer) => {
+  const onSelectPlan = (code: PaymentSubscriptionCode) => {
+    haptic.selection();
+    setSelectedPlan((prev) => (prev === code ? null : code));
+  };
+
+  const onSelectPeriod = (m: number) => {
+    haptic.selection();
+    setPeriod(m);
+  };
+
+  const openCheckout = (offer: ShopSubscriptionOffer) => {
     haptic.impact('medium');
-    setCheckoutTarget({ offer });
+    setCheckoutTarget(offer);
     setCheckoutOpen(true);
+  };
+
+  const onCtaClick = () => {
+    if (!selectedPlan) return;
+    const offer = getOffer(selectedPlan);
+    if (!offer) return;
+    openCheckout(offer);
+  };
+
+  const onTrialClick = () => {
+    if (!selectedPlan) {
+      const basic = getOffer('BASIC');
+      if (basic) openCheckout(basic);
+      return;
+    }
+    const offer = getOffer(selectedPlan);
+    if (offer) openCheckout(offer);
   };
 
   const handleCheckoutContinue = async (chosen: CoinCheckoutMethod) => {
     const target = checkoutTarget;
     if (!target) return;
 
-    const packageId = target.offer.packageId;
-
-    const closeAndClearCheckout = (): void => {
+    const closeAndClear = () => {
       setCheckoutOpen(false);
       setCheckoutSubmitting(false);
       setCheckoutTarget(null);
     };
 
-    const notify = (msg: string): void => {
-      if (webApp?.showAlert) {
-        webApp.showAlert(msg);
-      } else {
-        window.alert(msg);
-      }
+    const notify = (msg: string) => {
+      if (webApp?.showAlert) webApp.showAlert(msg);
+      else window.alert(msg);
     };
 
     if (chosen === 'payme_uz') {
-      closeAndClearCheckout();
+      closeAndClear();
       notify(t('shop.paymeUzSoon'));
       return;
     }
-
     if (chosen === 'click_uz') {
-      closeAndClearCheckout();
+      closeAndClear();
       notify(t('shop.clickUzSoon'));
       return;
     }
-
     if (!webApp) {
       notify(t('shop.starsNeedTelegram'));
       return;
@@ -173,13 +238,10 @@ const Shop = () => {
     setCheckoutSubmitting(true);
     try {
       const invoice = await createTelegramInvoice({
-        packageId,
-        idempotencyKey: `${packageId}-${Date.now()}`,
+        packageId: target.packageId,
+        idempotencyKey: `${target.packageId}-${Date.now()}`,
       });
-      setCheckoutOpen(false);
-      setCheckoutSubmitting(false);
-      setCheckoutTarget(null);
-
+      closeAndClear();
       webApp.openInvoice(invoice.invoiceUrl, async (status) => {
         if (status === 'paid') {
           try {
@@ -196,9 +258,7 @@ const Shop = () => {
               err instanceof Error ? err.message : t('shop.purchaseError'),
             );
           }
-        } else if (status === 'cancelled') {
-          // user closed invoice
-        } else {
+        } else if (status !== 'cancelled') {
           webApp.showAlert(`${t('shop.purchaseError')} (${status})`);
         }
       });
@@ -209,52 +269,53 @@ const Shop = () => {
     }
   };
 
-  const tabClass = (isActive: boolean) =>
-    [
-      'flex-1 rounded-lg py-2.5 text-center text-sm font-semibold transition-all',
-      isActive
-        ? 'bg-white dark:bg-gray-900 shadow text-gray-900 dark:text-white'
-        : 'text-gray-500 dark:text-gray-400',
-    ].join(' ');
+  const selectedOffer = selectedPlan ? getOffer(selectedPlan) : null;
+  const ctaLabel = selectedOffer
+    ? t('shop.ctaSubscribe', {
+        plan: selectedPlan === 'PRO' ? 'Pro' : 'Basic',
+        price: fmtNum(selectedOffer.perMoUzs || selectedOffer.priceUzs),
+      })
+    : t('shop.ctaPickPlan');
+
+  const ctaBtnClass = selectedPlan === 'PRO' ? 'btn--pro' : selectedPlan === 'BASIC' ? 'btn--basic' : 'btn--ghost';
 
   return (
-    <div className="relative flex min-h-screen w-full flex-col max-w-[430px] mx-auto overflow-x-hidden bg-gray-50 dark:bg-background-dark">
-      <header className="sticky top-0 z-10 flex items-center bg-gray-50/80 dark:bg-background-dark/80 backdrop-blur-md p-4 justify-between shrink-0">
+    <div className="shop-scope relative flex min-h-screen w-full flex-col max-w-[430px] mx-auto overflow-x-hidden">
+      <header className="sticky top-0 z-10 flex items-center bg-[color:var(--bg-app)] backdrop-blur-md p-4 justify-between shrink-0">
         <button
           type="button"
           aria-label={t('common.goBack')}
           onClick={() => navigate(-1)}
-          className="text-gray-800 dark:text-white flex size-10 shrink-0 items-center justify-center rounded-xl hover:bg-black/5 dark:hover:bg-white/10"
+          className="flex size-10 shrink-0 items-center justify-center rounded-xl hover:bg-black/5 dark:hover:bg-white/10"
+          style={{ color: 'var(--text-1)' }}
         >
           <span className="material-symbols-outlined">arrow_back</span>
         </button>
-        <h1 className="flex-1 text-center text-lg font-bold text-gray-800 dark:text-white">
+        <h1
+          className="flex-1 text-center text-lg font-bold"
+          style={{ color: 'var(--text-1)' }}
+        >
           {t('shop.title')}
         </h1>
         <div className="w-10" />
       </header>
 
-      <div className="px-4 pt-2 pb-3">
-        <div
-          className="flex gap-1 rounded-xl bg-gray-100 dark:bg-gray-800 p-1"
-          role="tablist"
-        >
+      {/* Tabs */}
+      <div className="shop-tabs">
+        <div className="shop-tabs-inner" data-tab={tab} role="tablist">
+          <div className="shop-tabs-thumb" aria-hidden="true" />
           <button
             type="button"
             role="tab"
-            aria-selected={tab === 'subscription'}
-            aria-label={t('shop.tabSubscriptionAria')}
-            className={tabClass(tab === 'subscription')}
-            onClick={() => onTab('subscription')}
+            aria-selected={tab === 'plans'}
+            onClick={() => onTab('plans')}
           >
-            {t('shop.tabSubscription')}
+            {t('shop.tabPlans')}
           </button>
           <button
             type="button"
             role="tab"
             aria-selected={tab === 'history'}
-            aria-label={t('shop.tabHistoryAria')}
-            className={tabClass(tab === 'history')}
             onClick={() => onTab('history')}
           >
             {t('shop.tabHistory')}
@@ -263,237 +324,98 @@ const Shop = () => {
       </div>
 
       {!auth ? (
-        <EmptyState
-          icon={<span className="material-symbols-outlined text-5xl text-primary">login</span>}
-          title={t('shop.signInPrompt')}
-          description={t('shop.signInPromptDesc')}
-          action={{
-            label: t('shop.goToLogin'),
-            onClick: () => navigate('/login'),
-          }}
-        />
+        <div className="empty">
+          <div className="empty-art">
+            <span className="material-symbols-outlined" style={{ fontSize: 40 }}>
+              login
+            </span>
+          </div>
+          <div>
+            <h4>{t('shop.signInPrompt')}</h4>
+            <p>{t('shop.signInPromptDesc')}</p>
+          </div>
+          <button
+            type="button"
+            className="btn btn--md btn--basic"
+            onClick={() => navigate('/login')}
+          >
+            {t('shop.goToLogin')}
+          </button>
+        </div>
       ) : (
         <motion.div
           key={tab}
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.2 }}
-          className="flex-1 px-4 pb-28"
+          className="flex-1 px-4 pb-4"
         >
-          {tab === 'subscription' && (
-            <>
-              <p className="mb-3 text-sm text-gray-600 dark:text-gray-400">
-                {t('shop.subscriptionTabHint')}
-              </p>
-
-              <Card padding="md" className="mb-4 bg-gradient-to-br from-primary to-purple-600 border-0 shadow-lg shadow-primary/20 text-white">
-                <p className="text-xs uppercase tracking-wider opacity-80">
-                  {t('subscription.yourPlan')}
-                </p>
-                <p className="mt-1 text-2xl font-bold">{t(`subscription.${currentTier}`)}</p>
-                {subscription && subscription.statusCode === 'ACTIVE' ? (
-                  <p className="mt-2 text-sm opacity-90">
-                    {t('subscription.activeUntil', {
-                      date: formatDate(subscription.expiredAt),
-                    })}
-                  </p>
-                ) : (
-                  <p className="mt-2 text-sm opacity-90">
-                    {t('usage.newWordsRemaining', {
-                      remaining: remainingNewWords(),
-                      limit: FREE_TIER_LIMITS.NEW_WORDS_PER_DAY,
-                    })}
-                  </p>
-                )}
-              </Card>
-
-              <h2 className="mb-3 text-base font-bold text-gray-900 dark:text-white">
-                {t('shop.subscriptionOffersTitle')}
-              </h2>
-
-              {subOffersStatus === 'loading' && (
-                <div className="grid grid-cols-1 gap-3 mb-4">
-                  {[1, 2].map((i) => (
-                    <Card
-                      key={i}
-                      padding="md"
-                      className="border border-gray-100 dark:border-gray-800"
-                    >
-                      <Skeleton className="h-5 w-2/3 mb-2" />
-                      <Skeleton className="h-8 w-1/2 mb-1" />
-                      <Skeleton className="h-9 w-full rounded-xl mt-3" />
-                    </Card>
-                  ))}
-                </div>
-              )}
-
-              {subOffersStatus === 'error' && (
-                <EmptyState
-                  className="py-8 mb-4"
-                  icon={<span className="material-symbols-outlined text-5xl text-gray-300">workspace_premium</span>}
-                  title={t('shop.loadSubscriptionsError')}
-                  description={subOffersError ?? ''}
-                  action={{
-                    label: t('common.tryAgain'),
-                    onClick: () => void loadShopSubscriptions(),
-                  }}
-                />
-              )}
-
-              {subOffersStatus === 'success' &&
-                subOffersData &&
-                subOffersData.subscriptions.length === 0 && (
-                  <p className="mb-4 text-center text-sm text-gray-500">
-                    {t('shop.loadSubscriptionsError')}
-                  </p>
-                )}
-
-              {subOffersStatus === 'success' &&
-                !!subOffersData?.subscriptions?.length && (
-                  <div className="grid grid-cols-1 gap-3 mb-4">
-                    {subOffersData.subscriptions.map((offer) => (
-                      <Card
-                        key={offer.packageId}
-                        variant="flat"
-                        padding="md"
-                        className="border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 flex flex-col gap-3"
-                      >
-                        <div>
-                          <div className="flex items-start justify-between gap-2">
-                            <p className="font-bold text-gray-900 dark:text-white leading-tight">
-                              {offer.name}
-                            </p>
-                            <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary uppercase">
-                              {offer.code}
-                            </span>
-                          </div>
-                          <p className="mt-1 text-xs text-gray-500">
-                            {t('shop.subscriptionMonthsLabel', { count: offer.month })}
-                          </p>
-                          <div className="mt-2 space-y-0.5 text-[11px] text-gray-500">
-                            {offer.priceStars > 0 && (
-                              <p>
-                                {t('shop.stars')}: {offer.priceStars.toLocaleString()}
-                              </p>
-                            )}
-                            {offer.priceCoin > 0 && (
-                              <p>
-                                {offer.priceCoin.toLocaleString()} {t('shop.octoCoins')}
-                              </p>
-                            )}
-                            {offer.priceUzs > 0 && (
-                              <p>UZS {offer.priceUzs.toLocaleString()}</p>
-                            )}
-                            {offer.priceUsd > 0 && <p>USD {offer.priceUsd}</p>}
-                            {offer.savedCoins > 0 && (
-                              <p className="text-green-600 dark:text-green-400">
-                                −{offer.savedCoins} {t('shop.octoCoins')}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                        <Button
-                          type="button"
-                          variant="primary"
-                          size="sm"
-                          fullWidth
-                          className="mt-auto"
-                          onClick={() => handleBuySubscriptionOffer(offer)}
-                        >
-                          {t('shop.buySubscription')}
-                        </Button>
-                      </Card>
-                    ))}
-                  </div>
-                )}
-
-              <Button
-                variant="secondary"
-                fullWidth
-                onClick={() => {
-                  haptic.impact('light');
-                  navigate('/subscription');
-                }}
-              >
-                {t('shop.allPlansCta')}
-              </Button>
-            </>
+          {tab === 'plans' && (
+            <PlansTab
+              currentTier={currentTier}
+              expiredAt={subscription?.expiredAt}
+              isActive={subscription?.statusCode === 'ACTIVE'}
+              subOffersStatus={subOffersStatus}
+              subOffersError={subOffersError}
+              availablePeriods={availablePeriods}
+              bestPeriod={bestPeriod}
+              period={period}
+              onSelectPeriod={onSelectPeriod}
+              grouped={grouped}
+              selectedPlan={selectedPlan}
+              onSelectPlan={onSelectPlan}
+              computeSavePct={computeSavePct}
+              onRetry={loadShopSubscriptions}
+              t={t}
+              formatDate={formatDate}
+            />
           )}
 
           {tab === 'history' && (
-            <>
-              {txStatus === 'loading' && (
-                <div className="space-y-3">
-                  {[1, 2, 3, 4, 5].map((i) => (
-                    <div key={i} className="flex justify-between rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-3">
-                      <div className="space-y-2 flex-1">
-                        <Skeleton className="h-4 w-1/3" />
-                        <Skeleton className="h-3 w-1/2" />
-                      </div>
-                      <Skeleton className="h-6 w-16" />
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {txStatus === 'error' && (
-                <EmptyState
-                  icon={<span className="material-symbols-outlined text-5xl text-gray-300">history</span>}
-                  title={t('shop.loadHistoryError')}
-                  description={txError ?? ''}
-                  action={{
-                    label: t('common.tryAgain'),
-                    onClick: () => fetchTransactions(),
-                  }}
-                />
-              )}
-
-              {txStatus === 'success' && transactions.length === 0 && (
-                <EmptyState
-                  icon={<span className="material-symbols-outlined text-5xl text-gray-300">payments</span>}
-                  title={t('shop.emptyHistoryTitle')}
-                  description={t('shop.emptyHistoryDesc')}
-                />
-              )}
-
-              {txStatus === 'success' && transactions.length > 0 && (
-                <ul className="space-y-2">
-                  {transactions.map((tx) => (
-                    <li key={tx.uid}>
-                      <Card
-                        variant="flat"
-                        padding="md"
-                        className="flex items-center justify-between border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900"
-                      >
-                        <div>
-                          <p className="text-sm font-medium text-gray-900 dark:text-white">
-                            {tx.provider}
-                          </p>
-                          <p className="text-xs text-gray-500 mt-0.5">
-                            {formatDate(tx.completedAt ?? tx.createdAt ?? tx.updatedAt)} ·{' '}
-                            {t(`subscription.txStatus.${tx.status}`)}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-1 shrink-0 text-amber-500">
-                          <span
-                            className="material-symbols-outlined text-base"
-                            style={{ fontVariationSettings: "'FILL' 1" }}
-                          >
-                            monetization_on
-                          </span>
-                          <span className="font-bold text-gray-900 dark:text-white">
-                            {typeof tx.coins === 'number' ? tx.coins.toLocaleString() : '—'}
-                          </span>
-                        </div>
-                      </Card>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </>
+            <HistoryTab
+              status={txStatus}
+              error={txError}
+              transactions={transactions}
+              onRetry={() => fetchTransactions()}
+              onGoPlans={() => onTab('plans')}
+              t={t}
+              formatDate={formatDate}
+            />
           )}
         </motion.div>
       )}
+
+      {/* Sticky CTA bar (only on plans tab) */}
+      {auth && tab === 'plans' && subOffersStatus === 'success' && (
+        <div className="cta-wrap">
+          <button
+            type="button"
+            className={`btn btn--block btn--lg ${ctaBtnClass}`}
+            disabled={!selectedPlan}
+            onClick={onCtaClick}
+          >
+            {ctaLabel}
+          </button>
+          <button
+            type="button"
+            className="trial-alt"
+            onClick={onTrialClick}
+            disabled={!availablePeriods.length}
+          >
+            <span className="trial-alt-or">{t('shop.or')}</span>
+            <span className="trial-alt-label">
+              <SparkleIcon />
+              {t('shop.trialAltLabel')}
+            </span>
+            <span className="trial-alt-meta">{t('shop.trialAltMeta')}</span>
+          </button>
+          <div className="cta-secure">
+            <LockIcon />
+            <span>{t('shop.secureNote')}</span>
+          </div>
+        </div>
+      )}
+
       <PaymentMethodModal
         isOpen={checkoutOpen}
         telegramInlineAvailable={Boolean(webApp)}
@@ -506,21 +428,17 @@ const Shop = () => {
         summary={
           checkoutTarget ? (
             <div>
-              <p className="font-semibold text-gray-900 dark:text-white">
-                {checkoutTarget.offer.name}
+              <p className="font-semibold" style={{ color: 'var(--text-1)' }}>
+                {checkoutTarget.name}
               </p>
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                {t('shop.subscriptionCodeBadge', { code: checkoutTarget.offer.code })}{' '}
-                · {t('shop.subscriptionMonthsLabel', { count: checkoutTarget.offer.month })}
+              <p className="mt-1 text-xs" style={{ color: 'var(--text-2)' }}>
+                {t('shop.subscriptionMonthsLabel', { count: checkoutTarget.month })}
+                {' · '}
+                UZS {fmtNum(checkoutTarget.priceUzs)}
               </p>
-              {checkoutTarget.offer.priceStars > 0 && (
-                <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
-                  {t('shop.stars')}: {checkoutTarget.offer.priceStars.toLocaleString()}
-                </p>
-              )}
-              {checkoutTarget.offer.priceCoin > 0 && (
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  {checkoutTarget.offer.priceCoin.toLocaleString()} {t('shop.octoCoins')}
+              {checkoutTarget.priceStars > 0 && (
+                <p className="mt-1 text-xs" style={{ color: 'var(--accent-stars)' }}>
+                  {t('shop.stars')}: {checkoutTarget.priceStars.toLocaleString()}
                 </p>
               )}
             </div>
@@ -533,3 +451,517 @@ const Shop = () => {
 };
 
 export default Shop;
+
+// ───────────────────────────────────────────────────────────
+// PlansTab
+// ───────────────────────────────────────────────────────────
+interface PlansTabProps {
+  currentTier: string;
+  expiredAt?: string;
+  isActive: boolean;
+  subOffersStatus: LoadStatus;
+  subOffersError: string | null;
+  availablePeriods: number[];
+  bestPeriod: number | null;
+  period: number | null;
+  onSelectPeriod: (m: number) => void;
+  grouped: Record<PaymentSubscriptionCode, Map<number, ShopSubscriptionOffer>>;
+  selectedPlan: PaymentSubscriptionCode | null;
+  onSelectPlan: (code: PaymentSubscriptionCode) => void;
+  computeSavePct: (code: PaymentSubscriptionCode, month: number) => number | null;
+  onRetry: () => void;
+  t: (key: TranslationKey, params?: Record<string, string | number>) => string;
+  formatDate: (iso?: string | null) => string;
+}
+
+const PlansTab = ({
+  currentTier,
+  expiredAt,
+  isActive,
+  subOffersStatus,
+  subOffersError,
+  availablePeriods,
+  bestPeriod,
+  period,
+  onSelectPeriod,
+  grouped,
+  selectedPlan,
+  onSelectPlan,
+  computeSavePct,
+  onRetry,
+  t,
+  formatDate,
+}: PlansTabProps) => {
+  return (
+    <div className="flex flex-col gap-4 pt-1">
+      <CurrentPlanBanner
+        tier={currentTier}
+        expiredAt={expiredAt}
+        isActive={isActive}
+        t={t}
+        formatDate={formatDate}
+      />
+
+      {subOffersStatus === 'loading' && <PlansSkeleton />}
+
+      {subOffersStatus === 'error' && (
+        <div className="empty">
+          <div className="empty-art">
+            <span className="material-symbols-outlined" style={{ fontSize: 40 }}>
+              error
+            </span>
+          </div>
+          <div>
+            <h4>{t('shop.loadSubscriptionsError')}</h4>
+            <p>{subOffersError ?? ''}</p>
+          </div>
+          <button
+            type="button"
+            className="btn btn--md btn--ghost"
+            onClick={onRetry}
+          >
+            {t('common.tryAgain')}
+          </button>
+        </div>
+      )}
+
+      {subOffersStatus === 'success' && availablePeriods.length === 0 && (
+        <div className="empty">
+          <div className="empty-art">
+            <span className="material-symbols-outlined" style={{ fontSize: 40 }}>
+              workspace_premium
+            </span>
+          </div>
+          <div>
+            <h4>{t('shop.loadSubscriptionsError')}</h4>
+          </div>
+        </div>
+      )}
+
+      {subOffersStatus === 'success' && availablePeriods.length > 0 && (
+        <>
+          <div className="section-label">
+            <h3>{t('shop.unlockMore')}</h3>
+            <span className="meta">
+              {t('shop.plansCount', { count: PLAN_CODES.length })}
+            </span>
+          </div>
+
+          {availablePeriods.length > 1 && (
+            <div
+              className="period-cards"
+              style={{
+                gridTemplateColumns: `repeat(${availablePeriods.length}, 1fr)`,
+              }}
+            >
+              {availablePeriods.map((m) => {
+                const isBest = m === bestPeriod && availablePeriods.length >= 2;
+                const isSel = m === period;
+                const savePct = computeSavePct('BASIC', m);
+                return (
+                  <button
+                    key={m}
+                    type="button"
+                    className="period-card"
+                    data-selected={isSel}
+                    data-best={isBest}
+                    onClick={() => onSelectPeriod(m)}
+                  >
+                    {isBest && (
+                      <span className="period-card-best">{t('shop.bestValue')}</span>
+                    )}
+                    <span className="period-card-num">{m}</span>
+                    <span className="period-card-unit">{t('shop.monthsShort')}</span>
+                    {savePct ? (
+                      <span className="period-card-save" data-best={isBest || undefined}>
+                        −{savePct}%
+                      </span>
+                    ) : (
+                      <span className="period-card-save period-card-save--empty">—</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="plans-rows">
+            {PLAN_CODES.map((code) => {
+              const offer = period !== null ? grouped[code].get(period) ?? null : null;
+              if (!offer) return null;
+              return (
+                <PlanCard
+                  key={code}
+                  code={code}
+                  offer={offer}
+                  selected={selectedPlan === code}
+                  onSelect={() => onSelectPlan(code)}
+                  isCurrent={currentTier === code.toLowerCase()}
+                  t={t}
+                />
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+// ───────────────────────────────────────────────────────────
+// Current Plan Banner
+// ───────────────────────────────────────────────────────────
+interface CurrentPlanBannerProps {
+  tier: string;
+  expiredAt?: string;
+  isActive: boolean;
+  t: (key: TranslationKey, params?: Record<string, string | number>) => string;
+  formatDate: (iso?: string | null) => string;
+}
+
+const CurrentPlanBanner = ({
+  tier,
+  expiredAt,
+  isActive,
+  t,
+  formatDate,
+}: CurrentPlanBannerProps) => {
+  const variant = !isActive ? 'free' : tier === 'pro' ? 'pro' : 'basic';
+
+  if (variant === 'free') {
+    const features = [
+      t('shop.freeFeature1'),
+      t('shop.freeFeature2'),
+      t('shop.freeFeature3'),
+      t('shop.freeFeature4'),
+    ];
+    return (
+      <div className="cpb">
+        <div className="cpb-row">
+          <div className="cpb-icon">
+            <BookmarkIcon />
+          </div>
+          <div className="cpb-body">
+            <div className="cpb-eyebrow">{t('shop.currentPlan')}</div>
+            <div className="cpb-title">{t('shop.tierFree')}</div>
+            <div className="cpb-sub">{t('shop.freeSubtitle')}</div>
+          </div>
+        </div>
+        <ul className="cpb-features">
+          {features.map((f, i) => (
+            <li key={i}>
+              <CheckIcon />
+              <span>{f}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+
+  const planName = variant === 'pro' ? 'PRO' : 'BASIC';
+  const className = variant === 'pro' ? 'cpb cpb--pro' : 'cpb cpb--basic';
+  return (
+    <div className={className}>
+      <div className="cpb-row">
+        <div className="cpb-icon">
+          <ShieldIcon />
+        </div>
+        <div className="cpb-body">
+          <div className="cpb-eyebrow">{t('shop.currentPlan')}</div>
+          <div className="cpb-title">
+            {planName}
+            <span className="cpb-dot" />
+          </div>
+          <div className="cpb-sub">
+            {t('shop.activeUntil', { date: formatDate(expiredAt) })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ───────────────────────────────────────────────────────────
+// Plan Card
+// ───────────────────────────────────────────────────────────
+interface PlanCardProps {
+  code: PaymentSubscriptionCode;
+  offer: ShopSubscriptionOffer;
+  selected: boolean;
+  onSelect: () => void;
+  isCurrent: boolean;
+  t: (key: TranslationKey, params?: Record<string, string | number>) => string;
+}
+
+const PlanCard = ({ code, offer, selected, onSelect, isCurrent, t }: PlanCardProps) => {
+  const isPro = code === 'PRO';
+  const className = `plan ${isPro ? 'plan--pro' : 'plan--basic'}`;
+  const heroKey: TranslationKey = isPro ? 'shop.proHero' : 'shop.basicHero';
+  const extrasKeys: TranslationKey[] = isPro
+    ? ['shop.proExtra1', 'shop.proExtra2', 'shop.proExtra3', 'shop.proExtra4']
+    : [
+        'shop.basicExtra1',
+        'shop.basicExtra2',
+        'shop.basicExtra3',
+        'shop.basicExtra4',
+        'shop.basicExtra5',
+      ];
+  const extras = extrasKeys.map((k) => t(k));
+  const perMo = offer.perMoUzs || offer.priceUzs;
+
+  return (
+    <button
+      type="button"
+      className={className}
+      data-selected={selected}
+      onClick={onSelect}
+    >
+      {isPro && <span className="plan-glow" aria-hidden="true" />}
+      {isPro && !isCurrent && <span className="plan-badge">★ {t('shop.hit')}</span>}
+
+      <div className="plan-h-top">
+        <div className="plan-h-left">
+          <div className="plan-h-radio">
+            <CheckIcon strokeWidth={2.6} />
+          </div>
+          <div className="plan-h-titlewrap">
+            <div className="plan-head">
+              <ShieldIcon size={14} />
+              <span>{isPro ? 'Pro' : 'Basic'}</span>
+            </div>
+            <span className="trial-chip">
+              <SparkleIcon size={9} />
+              {t('shop.trialChip')}
+            </span>
+          </div>
+        </div>
+        <div className="plan-h-price">
+          <div className="plan-h-price-row">
+            <span className="plan-price-num">{fmtNum(perMo)}</span>
+            <span className="plan-price-unit">{t('shop.uzsPerMonth')}</span>
+          </div>
+          {offer.month > 1 && (
+            <div className="plan-h-price-meta">
+              {t('shop.totalLabel', { total: fmtNum(offer.priceUzs) })}
+            </div>
+          )}
+          {(offer.priceStars > 0 || offer.priceUsd > 0) && (
+            <div className="plan-h-price-meta" style={{ marginTop: 2 }}>
+              {offer.priceStars > 0 && (
+                <span>{offer.priceStars.toLocaleString()} ⭐</span>
+              )}
+              {offer.priceStars > 0 && offer.priceUsd > 0 && ' · '}
+              {offer.priceUsd > 0 && <span>${offer.priceUsd}</span>}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <ul className="plan-features plan-features--hero">
+        <li>
+          <CheckIcon strokeWidth={2.4} />
+          <span>{t(heroKey)}</span>
+        </li>
+      </ul>
+
+      <div className="plan-features-reveal" data-open={selected}>
+        <div>
+          <ul className="plan-features plan-features--extra">
+            {extras.map((f, i) => (
+              <li key={i} style={{ animationDelay: `${i * 35}ms` }}>
+                <CheckIcon strokeWidth={2.4} />
+                <span>{f}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+
+      {!selected && (
+        <span className="plan-h-hint">
+          + {t('shop.moreFeatures', { count: extras.length })}
+        </span>
+      )}
+    </button>
+  );
+};
+
+// ───────────────────────────────────────────────────────────
+// History Tab
+// ───────────────────────────────────────────────────────────
+interface HistoryTabProps {
+  status: LoadStatus;
+  error: string | null;
+  transactions: import('../../lib/api/paymentClient').PaymentTransactionResponse[];
+  onRetry: () => void;
+  onGoPlans: () => void;
+  t: (key: TranslationKey, params?: Record<string, string | number>) => string;
+  formatDate: (iso?: string | null) => string;
+}
+
+const HistoryTab = ({
+  status,
+  error,
+  transactions,
+  onRetry,
+  onGoPlans,
+  t,
+  formatDate,
+}: HistoryTabProps) => {
+  if (status === 'loading') return <HistorySkeleton />;
+
+  if (status === 'error') {
+    return (
+      <div className="empty">
+        <div className="empty-art">
+          <span className="material-symbols-outlined" style={{ fontSize: 40 }}>
+            history
+          </span>
+        </div>
+        <div>
+          <h4>{t('shop.loadHistoryError')}</h4>
+          <p>{error ?? ''}</p>
+        </div>
+        <button type="button" className="btn btn--md btn--ghost" onClick={onRetry}>
+          {t('common.tryAgain')}
+        </button>
+      </div>
+    );
+  }
+
+  if (status === 'success' && transactions.length === 0) {
+    return (
+      <div className="empty">
+        <div className="empty-art">
+          <span className="material-symbols-outlined" style={{ fontSize: 40 }}>
+            receipt_long
+          </span>
+        </div>
+        <div>
+          <h4>{t('shop.emptyHistoryTitle')}</h4>
+          <p>{t('shop.emptyHistoryDesc')}</p>
+        </div>
+        <button type="button" className="btn btn--md btn--pro" onClick={onGoPlans}>
+          {t('shop.pickPlan')}
+          <ArrowRightIcon />
+        </button>
+      </div>
+    );
+  }
+
+  if (status !== 'success') return null;
+
+  return (
+    <div className="pt-1">
+      <div className="section-label">
+        <h3>{t('shop.transactions')}</h3>
+        <span className="meta">
+          {t('shop.recordsCount', { count: transactions.length })}
+        </span>
+      </div>
+      <div className="tx-list">
+        {transactions.map((tx) => {
+          const providerKey = (tx.provider ?? '').toLowerCase();
+          const providerLabel =
+            providerKey === 'telegram'
+              ? 'Stars'
+              : providerKey
+                ? providerKey.charAt(0).toUpperCase() + providerKey.slice(1)
+                : '—';
+          const iconClass = `tx-icon tx-icon--${providerKey || 'default'}`;
+          const iconChar = providerLabel.charAt(0).toUpperCase();
+          return (
+            <div className="tx" key={tx.uid}>
+              <div className={iconClass}>{iconChar}</div>
+              <div className="tx-body">
+                <div className="tx-title">{providerLabel}</div>
+                <div className="tx-meta">
+                  <span>{t(`subscription.txStatus.${tx.status}` as TranslationKey)}</span>
+                </div>
+                <div className="tx-date">
+                  {formatDate(tx.completedAt ?? tx.createdAt ?? tx.updatedAt)}
+                </div>
+              </div>
+              <div className="tx-right">
+                <div className="tx-amount">
+                  {typeof tx.coins === 'number' ? `${fmtNum(tx.coins)} ⭐` : '—'}
+                </div>
+                <div className={`tx-status tx-status--${tx.status}`}>
+                  {t(`shop.statusLabel.${tx.status}` as TranslationKey)}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+// ───────────────────────────────────────────────────────────
+// Skeletons
+// ───────────────────────────────────────────────────────────
+const PlansSkeleton = () => (
+  <div className="flex flex-col gap-3 pt-2">
+    <div className="sk" style={{ height: 110, borderRadius: 16 }} />
+    <div className="sk" style={{ height: 92, borderRadius: 12 }} />
+    <div className="sk" style={{ height: 140, borderRadius: 16 }} />
+    <div className="sk" style={{ height: 140, borderRadius: 16 }} />
+  </div>
+);
+
+const HistorySkeleton = () => (
+  <div className="tx-list">
+    {[0, 1, 2, 3, 4].map((i) => (
+      <div className="tx" key={i}>
+        <div className="sk" style={{ width: 36, height: 36, borderRadius: 10 }} />
+        <div className="tx-body" style={{ gap: 6 }}>
+          <div className="sk" style={{ width: '60%', height: 12 }} />
+          <div className="sk" style={{ width: '40%', height: 10 }} />
+          <div className="sk" style={{ width: '30%', height: 9 }} />
+        </div>
+        <div className="tx-right" style={{ gap: 5 }}>
+          <div className="sk" style={{ width: 50, height: 12 }} />
+          <div className="sk" style={{ width: 60, height: 16, borderRadius: 999 }} />
+        </div>
+      </div>
+    ))}
+  </div>
+);
+
+// ───────────────────────────────────────────────────────────
+// Inline icons (kept lightweight; mockup uses thin strokes)
+// ───────────────────────────────────────────────────────────
+const CheckIcon = ({ size = 12, strokeWidth = 2.4 }: { size?: number; strokeWidth?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="20 6 9 17 4 12" />
+  </svg>
+);
+const ShieldIcon = ({ size = 20 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+  </svg>
+);
+const BookmarkIcon = ({ size = 20 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+  </svg>
+);
+const SparkleIcon = ({ size = 12 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 2l1.8 6.4L20 10l-6.2 1.6L12 18l-1.8-6.4L4 10l6.2-1.6z" />
+  </svg>
+);
+const LockIcon = () => (
+  <svg width={11} height={11} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="11" width="18" height="11" rx="2" />
+    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+  </svg>
+);
+const ArrowRightIcon = () => (
+  <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+    <line x1="5" y1="12" x2="19" y2="12" />
+    <polyline points="12 5 19 12 12 19" />
+  </svg>
+);
