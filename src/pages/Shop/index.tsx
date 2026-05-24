@@ -9,8 +9,6 @@ import {
   createTelegramInvoice,
   confirmTelegramPayment,
 } from '../../lib/api/telegramPayment';
-import { getPrices } from '../../lib/api/pricing';
-import type { PackageResponse, PriceResponse } from '../../lib/api/pricing';
 import { getShopSubscriptions } from '../../lib/api/shop';
 import type {
   ShopSubscriptionOffer,
@@ -30,11 +28,9 @@ import {
   Skeleton,
 } from '../../components/ui';
 
-type ShopTab = 'coins' | 'subscription' | 'history';
+type ShopTab = 'subscription' | 'history';
 
-type CheckoutTarget =
-  | { kind: 'coins'; pkg: PackageResponse }
-  | { kind: 'subscription'; offer: ShopSubscriptionOffer };
+type CheckoutTarget = { offer: ShopSubscriptionOffer };
 
 type LoadStatus = 'idle' | 'loading' | 'success' | 'error';
 
@@ -43,7 +39,6 @@ const Shop = () => {
   const navigate = useNavigate();
   const { haptic, webApp } = useTelegram();
 
-  const user = useUserStore((s) => s.user);
   const refreshAccount = useUserStore((s) => s.refreshAccount);
 
   const {
@@ -66,10 +61,7 @@ const Shop = () => {
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [checkoutSubmitting, setCheckoutSubmitting] = useState(false);
 
-  const [tab, setTab] = useState<ShopTab>('coins');
-  const [pricesStatus, setPricesStatus] = useState<LoadStatus>('idle');
-  const [pricesData, setPricesData] = useState<PriceResponse | null>(null);
-  const [pricesError, setPricesError] = useState<string | null>(null);
+  const [tab, setTab] = useState<ShopTab>('subscription');
 
   const [subOffersStatus, setSubOffersStatus] = useState<LoadStatus>('idle');
   const [subOffersData, setSubOffersData] = useState<SubscriptionsResponse | null>(
@@ -83,29 +75,6 @@ const Shop = () => {
   useEffect(() => {
     if (auth) void refreshAccount();
   }, [auth, refreshAccount]);
-
-  const loadPrices = useCallback(async () => {
-    setPricesStatus('loading');
-    setPricesError(null);
-    try {
-      const data = await getPrices();
-      setPricesData(data);
-      setPricesStatus('success');
-    } catch (e) {
-      setPricesStatus('error');
-      setPricesError(e instanceof Error ? e.message : t('shop.loadPackagesError'));
-    }
-  }, [t]);
-
-  useEffect(() => {
-    if (!auth) return;
-    if (tab !== 'coins') return;
-    if (pricesStatus !== 'idle') return;
-    const id = requestAnimationFrame(() => {
-      void loadPrices();
-    });
-    return () => cancelAnimationFrame(id);
-  }, [auth, tab, pricesStatus, loadPrices]);
 
   useEffect(() => {
     if (!auth) return;
@@ -158,15 +127,9 @@ const Shop = () => {
     setTab(next);
   };
 
-  const handleBuyCoins = (pkg: PackageResponse) => {
-    haptic.impact('medium');
-    setCheckoutTarget({ kind: 'coins', pkg });
-    setCheckoutOpen(true);
-  };
-
   const handleBuySubscriptionOffer = (offer: ShopSubscriptionOffer) => {
     haptic.impact('medium');
-    setCheckoutTarget({ kind: 'subscription', offer });
+    setCheckoutTarget({ offer });
     setCheckoutOpen(true);
   };
 
@@ -174,8 +137,7 @@ const Shop = () => {
     const target = checkoutTarget;
     if (!target) return;
 
-    const packageId =
-      target.kind === 'coins' ? target.pkg.packageId : target.offer.packageId;
+    const packageId = target.offer.packageId;
 
     const closeAndClearCheckout = (): void => {
       setCheckoutOpen(false);
@@ -280,16 +242,6 @@ const Shop = () => {
           <button
             type="button"
             role="tab"
-            aria-selected={tab === 'coins'}
-            aria-label={t('shop.tabCoinsAria')}
-            className={tabClass(tab === 'coins')}
-            onClick={() => onTab('coins')}
-          >
-            {t('shop.tabCoins')}
-          </button>
-          <button
-            type="button"
-            role="tab"
             aria-selected={tab === 'subscription'}
             aria-label={t('shop.tabSubscriptionAria')}
             className={tabClass(tab === 'subscription')}
@@ -328,114 +280,6 @@ const Shop = () => {
           transition={{ duration: 0.2 }}
           className="flex-1 px-4 pb-28"
         >
-          {tab === 'coins' && (
-            <>
-              <Card padding="md" className="mb-4 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 shadow-card">
-                <p className="text-xs uppercase tracking-wide text-gray-400">
-                  {t('shop.balance')}
-                </p>
-                <div className="mt-1 flex items-center gap-2">
-                  <span
-                    className="material-symbols-outlined text-amber-500"
-                    style={{ fontVariationSettings: "'FILL' 1" }}
-                  >
-                    monetization_on
-                  </span>
-                  <span className="text-2xl font-bold text-gray-900 dark:text-white">
-                    {(user?.octoCoins ?? 0).toLocaleString()}
-                  </span>
-                  <span className="text-sm text-gray-500">{t('shop.octoCoins')}</span>
-                </div>
-              </Card>
-
-              <h2 className="mb-3 text-base font-bold text-gray-900 dark:text-white">
-                {t('shop.coinPackages')}
-              </h2>
-
-              {pricesStatus === 'loading' && (
-                <div className="grid grid-cols-2 gap-3">
-                  {[1, 2, 3, 4].map((i) => (
-                    <div key={i} className="rounded-card bg-white dark:bg-gray-900 p-4 border border-gray-100 dark:border-gray-800 space-y-2">
-                      <Skeleton className="h-4 w-2/3" />
-                      <Skeleton className="h-8 w-1/2" />
-                      <Skeleton className="h-9 w-full rounded-xl" />
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {pricesStatus === 'error' && (
-                <EmptyState
-                  icon={<span className="material-symbols-outlined text-5xl text-gray-300">sell</span>}
-                  title={t('shop.loadPackagesError')}
-                  description={pricesError ?? ''}
-                  action={{
-                    label: t('common.tryAgain'),
-                    onClick: () => loadPrices(),
-                  }}
-                />
-              )}
-
-              {pricesStatus === 'success' && pricesData?.packages?.length === 0 && (
-                <p className="text-center text-sm text-gray-500 py-8">
-                  {t('shop.loadPackagesError')}
-                </p>
-              )}
-
-              {pricesStatus === 'success' &&
-                !!pricesData?.packages?.length &&
-                (
-                  <div className="grid grid-cols-2 gap-3">
-                    {pricesData.packages.map((pkg) => (
-                      <Card
-                        key={pkg.packageId}
-                        variant="flat"
-                        padding="md"
-                        className="border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 flex flex-col gap-3"
-                      >
-                        <div>
-                          <p className="font-bold text-gray-900 dark:text-white line-clamp-2 text-sm leading-tight">
-                            {pkg.name}
-                          </p>
-                          <p className="mt-2 flex items-center gap-1 text-lg font-black text-gray-900 dark:text-white">
-                            <span className="material-symbols-outlined text-amber-500 text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>
-                              monetization_on
-                            </span>
-                            {pkg.coin?.toLocaleString?.() ?? pkg.coin}
-                          </p>
-                          <div className="mt-2 space-y-0.5 text-[11px] text-gray-500">
-                            {pkg.priceStars > 0 && (
-                              <p>
-                                {t('shop.stars')}: {pkg.priceStars.toLocaleString()}
-                              </p>
-                            )}
-                            {pkg.priceUzs > 0 && (
-                              <p>
-                                UZS {pkg.priceUzs.toLocaleString()}
-                              </p>
-                            )}
-                            {pkg.priceUsd > 0 && (
-                              <p>USD {pkg.priceUsd}</p>
-                            )}
-                          </div>
-                        </div>
-                        <Button
-                          type="button"
-                          variant="primary"
-                          size="sm"
-                          fullWidth
-                          className="mt-auto"
-                          onClick={() => handleBuyCoins(pkg)}
-                        >
-                          {t('shop.buyCoins')}
-                        </Button>
-                      </Card>
-                    ))}
-                  </div>
-                )}
-            </>
-          )}
-
           {tab === 'subscription' && (
             <>
               <p className="mb-3 text-sm text-gray-600 dark:text-gray-400">
@@ -660,21 +504,7 @@ const Shop = () => {
           setCheckoutTarget(null);
         }}
         summary={
-          checkoutTarget?.kind === 'coins' ? (
-            <div>
-              <p className="font-semibold text-gray-900 dark:text-white">
-                {checkoutTarget.pkg.name}
-              </p>
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                {checkoutTarget.pkg.coin.toLocaleString()} {t('shop.octoCoins')}
-              </p>
-              {checkoutTarget.pkg.priceStars > 0 && (
-                <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
-                  {t('shop.stars')}: {checkoutTarget.pkg.priceStars.toLocaleString()}
-                </p>
-              )}
-            </div>
-          ) : checkoutTarget?.kind === 'subscription' ? (
+          checkoutTarget ? (
             <div>
               <p className="font-semibold text-gray-900 dark:text-white">
                 {checkoutTarget.offer.name}

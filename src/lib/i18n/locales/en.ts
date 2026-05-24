@@ -462,15 +462,11 @@ const en = {
 
   shop: {
     title: 'Shop',
-    tabCoins: 'Coins',
     tabSubscription: 'Plan',
     tabHistory: 'History',
-    balance: 'Balance',
-    coinPackages: 'Packages',
     signInPrompt: 'Sign in to shop and billing.',
-    signInPromptDesc: 'You need an active session to buy coins and view payments.',
+    signInPromptDesc: 'You need an active session to manage your subscription and view payments.',
     goToLogin: 'Log in',
-    loadPackagesError: 'Unable to load coin packages.',
     loadHistoryError: 'Unable to load transaction history.',
     emptyHistoryTitle: 'No purchases yet',
     emptyHistoryDesc: 'Coin top-ups and payments will appear here.',
@@ -495,7 +491,6 @@ const en = {
     clickUzSoon: 'Click payment flow is coming in a later update.',
     starsNeedTelegram:
       'Open WordZen as a Telegram Mini App to pay with Telegram Stars.',
-    tabCoinsAria: 'Coin packages tab',
     tabSubscriptionAria: 'Subscription tab',
     tabHistoryAria: 'Transaction history tab',
     coins: 'Coins',
@@ -542,8 +537,7 @@ const en = {
     subscribeNow: 'Subscribe Now',
     currentPlanFree: 'Current plan: Free',
     stars: 'Stars',
-    buyCoins: 'Buy Coins',
-    purchaseSuccess: 'Purchase successful! Coins have been added.',
+    purchaseSuccess: 'Purchase successful!',
     purchaseError: 'Purchase failed. Please try again.',
   },
 

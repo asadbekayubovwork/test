@@ -248,12 +248,6 @@ const Home = () => {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1 bg-amber-50 dark:bg-amber-900/20 px-3 py-1.5 rounded-full border border-amber-100 dark:border-amber-900/30">
-            <span className="material-symbols-outlined text-amber-500 text-lg fill-1">database</span>
-            <p className="text-amber-700 dark:text-amber-400 text-sm font-bold">
-              {user?.octoCoins?.toLocaleString() || '1,250'}
-            </p>
-          </div>
           <button
             onClick={() => navigate('/shop')}
             className="flex items-center justify-center p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"

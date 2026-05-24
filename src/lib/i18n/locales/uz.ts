@@ -491,8 +491,7 @@ const uz: PartialTranslations = {
     subscribeNow: 'Hozir obuna bo\'ling',
     currentPlanFree: 'Joriy reja: Bepul',
     stars: 'Yulduzlar',
-    buyCoins: 'Tangalar sotib olish',
-    purchaseSuccess: 'Xarid muvaffaqiyatli! Tangalar qo\'shildi.',
+    purchaseSuccess: 'Xarid muvaffaqiyatli!',
     purchaseError: 'Xarid amalga oshmadi. Qayta urinib ko\'ring.',
   },
 

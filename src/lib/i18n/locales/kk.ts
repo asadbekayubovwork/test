@@ -491,8 +491,7 @@ const kk: PartialTranslations = {
     subscribeNow: 'Қазір жазылу',
     currentPlanFree: 'Ағымдағы жоспар: Тегін',
     stars: 'Жұлдыздар',
-    buyCoins: 'Тиындар сатып алу',
-    purchaseSuccess: 'Сатып алу сәтті! Тиындар қосылды.',
+    purchaseSuccess: 'Сатып алу сәтті!',
     purchaseError: 'Сатып алу сәтсіз. Қайта көріңіз.',
   },
 

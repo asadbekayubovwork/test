@@ -491,8 +491,7 @@ const uk: PartialTranslations = {
     subscribeNow: 'Підписатися зараз',
     currentPlanFree: 'Поточний план: Безкоштовний',
     stars: 'Зірки',
-    buyCoins: 'Купити монети',
-    purchaseSuccess: 'Покупка успішна! Монети додано.',
+    purchaseSuccess: 'Покупка успішна!',
     purchaseError: 'Помилка покупки. Спробуйте ще раз.',
   },
 

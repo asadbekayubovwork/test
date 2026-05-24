@@ -464,15 +464,11 @@ const ru: PartialTranslations = {
 
   shop: {
     title: 'Магазин',
-    tabCoins: 'Монеты',
     tabSubscription: 'Подписка',
     tabHistory: 'История',
-    balance: 'Баланс',
-    coinPackages: 'Пакеты',
     signInPrompt: 'Войдите, чтобы открыть магазин и оплату.',
-    signInPromptDesc: 'Нужна активная сессия для покупки монет и истории платежей.',
+    signInPromptDesc: 'Нужна активная сессия для управления подпиской и истории платежей.',
     goToLogin: 'Вход',
-    loadPackagesError: 'Не удалось загрузить пакеты монет.',
     loadHistoryError: 'Не удалось загрузить историю операций.',
     emptyHistoryTitle: 'Пока нет платежей',
     emptyHistoryDesc: 'Пополнения и оплата появятся здесь.',
@@ -498,7 +494,6 @@ const ru: PartialTranslations = {
     clickUzSoon: 'Оплата через Click появится в следующем обновлении.',
     starsNeedTelegram:
       'Откройте WordZen как Mini App в Telegram, чтобы оплатить звёздами.',
-    tabCoinsAria: 'Вкладка пакетов монет',
     tabSubscriptionAria: 'Вкладка подписки',
     tabHistoryAria: 'Вкладка истории',
     coins: 'Монеты',
@@ -545,8 +540,7 @@ const ru: PartialTranslations = {
     subscribeNow: 'Подписаться',
     currentPlanFree: 'Текущий план: Бесплатный',
     stars: 'Звёзды',
-    buyCoins: 'Купить монеты',
-    purchaseSuccess: 'Покупка успешна! Монеты добавлены.',
+    purchaseSuccess: 'Покупка успешна!',
     purchaseError: 'Ошибка покупки. Попробуйте снова.',
   },
 
